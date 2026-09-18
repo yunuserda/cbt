@@ -1,7 +1,3 @@
-import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
-
 // URL Konfigurasi
 const URL_API = "https://smansrono.sch.id/link_ujian/proses_hukuman.php";
 const URL_GET_LINK = "https://smansrono.sch.id/link_ujian/get_sat.php";
@@ -16,25 +12,41 @@ const inputNama = document.getElementById('input-nama');
 const inputNIS = document.getElementById('input-nis');
 const btnSimpan = document.getElementById('btn-simpan');
 const btnMengerti = document.getElementById('btn-mengerti');
-const webViewFrame = document.getElementById('webview-frame');
 
 // State Aplikasi
 let deviceID = localStorage.getItem("device_id") || "WIN-" + Math.random().toString(36).substring(2, 12);
 localStorage.setItem("device_id", deviceID);
 
 let linkUjianDariDatabase = "";
+let sedangMemuatLink = false;
 let sudahMulaiUjian = false;
 let sedangTerblokir = false;
 let timerHukuman = null;
 
-// 1. Dapatkan Link Ujian Terbaru dari Database
+// Track status penekanan tombol Shift + S
+let shiftSPressed = false;
+let shiftSTimeout = null;
+
+// 1. Dapatkan Link Ujian Terbaru dari Database (Dinamis dari PHP)
 async function ambilLinkTerbaru() {
+  sedangMemuatLink = true;
   try {
-    const response = await fetch(URL_GET_LINK);
+    // Tambahkan timestamp untuk menghindari caching browser
+    const response = await fetch(`${URL_GET_LINK}?_=` + Date.now());
     const data = await response.json();
-    linkUjianDariDatabase = data.link_sat;
+    
+    if (data && data.link_sat && data.link_sat.trim() !== "") {
+      linkUjianDariDatabase = data.link_sat.trim();
+      console.log("Link ujian berhasil dimuat dinamis:", linkUjianDariDatabase);
+    } else {
+      console.warn("Link ujian di database kosong/belum diatur.");
+      linkUjianDariDatabase = "";
+    }
   } catch (err) {
-    alert("Gagal koneksi server ujian!");
+    console.error("Gagal mengambil link ujian dari server:", err);
+    linkUjianDariDatabase = "";
+  } finally {
+    sedangMemuatLink = false;
   }
 }
 
@@ -53,8 +65,9 @@ async function hubungiServer(aksi, extraData = {}) {
     const res = await fetch(URL_API, { method: "POST", body: formData });
     const textRes = (await res.text()).trim();
 
-    if (textRes === "berhasil") {
-      hubungiServer("cek");
+    if (textRes === "berhasil" || aksi === "registrasi") {
+      layoutRegistrasi.classList.add('hidden');
+      layoutPeringatan.classList.remove('hidden');
       return;
     }
 
@@ -71,7 +84,7 @@ async function hubungiServer(aksi, extraData = {}) {
         sedangTerblokir = false;
         layoutBlokir.classList.add('hidden');
         if (timerHukuman) clearInterval(timerHukuman);
-        if (sudahMulaiUjian) webViewFrame.src = linkUjianDariDatabase;
+        if (sudahMulaiUjian && linkUjianDariDatabase) window.location.href = linkUjianDariDatabase;
       }
 
       if (!sudahMulaiUjian) {
@@ -86,6 +99,10 @@ async function hubungiServer(aksi, extraData = {}) {
     }
   } catch (err) {
     console.error("Gagal terhubung ke API:", err);
+    if (aksi === "registrasi") {
+      layoutRegistrasi.classList.add('hidden');
+      layoutPeringatan.classList.remove('hidden');
+    }
   }
 }
 
@@ -108,51 +125,95 @@ function mulaiLayarBlokir(durasiMs) {
   }, 1000);
 }
 
-// 4. Deteksi Kehilangan Fokus (Siswa Mencoba Alt+Tab / Buka Aplikasi Lain)
+// 4. Deteksi Kehilangan Fokus
 window.addEventListener('blur', () => {
   if (sudahMulaiUjian && !sedangTerblokir) {
     hubungiServer("tambah");
   }
 });
 
-// 5. Shortcut Keluar Kustom: Shift + S + X
+// 5. PROTEKSI KEYBOARD & TOMBOL KELUAR (SHIFT + S + X)
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
 window.addEventListener('keydown', (e) => {
-  if (e.shiftKey && (e.key === 'S' || e.key === 's')) {
-    const handleNextKey = (nextEvent) => {
-      if (nextEvent.key === 'X' || nextEvent.key === 'x') {
-        if (confirm("Apakah Anda yakin ingin keluar dari Exambrowser?")) {
-          appWindow.close();
-        }
+  const key = e.key.toUpperCase();
+
+  if (e.shiftKey && key === 'S') {
+    shiftSPressed = true;
+    clearTimeout(shiftSTimeout);
+    shiftSTimeout = setTimeout(() => {
+      shiftSPressed = false;
+    }, 2000);
+    return;
+  }
+
+  if (shiftSPressed && key === 'X') {
+    shiftSPressed = false;
+    clearTimeout(shiftSTimeout);
+    
+    if (confirm("Apakah Anda yakin ingin keluar dari Exambrowser?")) {
+      if (window.__TAURI__ && window.__TAURI__.window) {
+        window.__TAURI__.window.getCurrentWindow().close();
+      } else if (window.__TAURI_INTERNALS__) {
+        window.__TAURI_INTERNALS__.invoke('plugin:window|close');
+      } else {
+        window.close();
       }
-      window.removeEventListener('keydown', handleNextKey);
-    };
-    window.addEventListener('keydown', handleNextKey);
+    }
+    e.preventDefault();
+    return;
+  }
+
+  const isTargetInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+  if (isTargetInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    return;
+  }
+
+  if (e.ctrlKey || e.metaKey || e.altKey || key.startsWith('F')) {
+    e.preventDefault();
   }
 });
 
 // 6. Event Button Handlers
-btnSimpan.addEventListener('click', () => {
+btnSimpan.addEventListener('click', (e) => {
+  e.preventDefault();
   const nama = inputNama.value.trim();
   const nis = inputNIS.value.trim();
-  if (nama && nis) {
+  
+  if (nama !== "" && nis !== "") {
     hubungiServer("registrasi", { nama, nis });
   } else {
-    alert("Isi Nama dan NIS!");
+    alert("Isi Nama dan NIS terlebih dahulu!");
   }
 });
 
-btnMengerti.addEventListener('click', () => {
-  if (!linkUjianDariDatabase) {
-    ambilLinkTerbaru();
-    alert("Menghubungkan ke server...");
+btnMengerti.addEventListener('click', async (e) => {
+  e.preventDefault();
+
+  // Jika sedang memuat link dari server, tunggu sejenak
+  if (sedangMemuatLink) {
+    alert("Sedang mengambil link ujian dari server, harap tunggu sejenak...");
     return;
   }
-  layoutPeringatan.classList.add('hidden');
-  webViewFrame.classList.remove('hidden');
-  webViewFrame.src = linkUjianDariDatabase;
+
+  // Jika link belum ada, coba panggil lagi
+  if (!linkUjianDariDatabase) {
+    btnMengerti.innerText = "MEMUAT LINK...";
+    await ambilLinkTerbaru();
+    btnMengerti.innerText = "SAYA MENGERTI DAN SIAP";
+  }
+
+  // Jika link di database masih kosong
+  if (!linkUjianDariDatabase) {
+    alert("Link ujian belum diatur di server (Database). Silakan hubungi proktor!");
+    return;
+  }
+
   sudahMulaiUjian = true;
+  // Buka URL dinamis yang didapatkan dari database
+  window.location.href = linkUjianDariDatabase;
 });
 
-// Inisialisasi
+// Inisialisasi awal
 ambilLinkTerbaru();
 hubungiServer("cek");

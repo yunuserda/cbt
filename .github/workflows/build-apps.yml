@@ -1,4 +1,4 @@
-name: Build Windows App
+name: Build Desktop Apps (Windows & macOS)
 
 on:
   push:
@@ -9,21 +9,26 @@ jobs:
   build-tauri:
     permissions:
       contents: write
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Install dependencies
         run: npm install
-        
+
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0.5
         env:
@@ -31,6 +36,6 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Exambrowser CBT v__VERSION__'
-          releaseBody: 'File installer Windows untuk aplikasi Exambrowser CBT.'
+          releaseBody: 'File installer untuk Windows (.exe) dan macOS (.dmg).'
           releaseDraft: false
           prerelease: false

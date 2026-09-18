@@ -1,12 +1,12 @@
 {
-  "name": "sigma",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "tauri": "tauri"
-  },
+  "name": "cbt",
+  "version": "1.0.0",
+ "scripts": {
+  "dev": "serve src -l 1420",
+  "tauri": "tauri"
+},
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2.0.0",
+    "serve": "^14.2.0"
   }
 }

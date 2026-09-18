@@ -4,9 +4,9 @@
   "identifier": "com.smanteg.exambrowser",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
+    "frontendDist": "../src"
   },
   "app": {
     "windows": [
@@ -15,9 +15,7 @@
         "fullscreen": true,
         "resizable": false,
         "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": false,
-        "center": true
+        "alwaysOnTop": true
       }
     ],
     "security": {
