@@ -28,3 +28,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__ # Membuat Release otomatis
+          releaseName: 'SIGMA v__VERSION__'
+          releaseBody: 'File installer Windows untuk aplikasi SIGMA.'
+          releaseDraft: false
+          prerelease: false
